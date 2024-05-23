@@ -1,0 +1,59 @@
+img = imread(‘mHo7s.jpg&#39;);
+ImgBlurSigma = 2;
+MinHoughPeakDistance = 5;
+HoughConvolutionLength = 40;
+HoughConvolutionDilate = 2;
+BreakLineTolerance = 0.25;
+breakPointDilate = 6;
+img = (rgb2gray(img));
+img = imfilter(img, fspecial(&#39;gaussian&#39;, 10, ImgBlurSigma), &#39;symmetric&#39;);
+boneEdges = edge(img, &#39;canny&#39;);
+boneEdges = bwmorph(boneEdges, &#39;close&#39;);
+edgeRegs = regionprops(boneEdges, &#39;Area&#39;, &#39;PixelIdxList&#39;);
+AreaList = sort(vertcat(edgeRegs.Area), &#39;descend&#39;);
+edgeRegs(~ismember(vertcat(edgeRegs.Area), AreaList(1:2))) = [];
+edgeImg = zeros(size(img, 1), size(img,2));
+
+19
+
+edgeImg(vertcat(edgeRegs.PixelIdxList)) = 1;
+[H,T,R] = hough(edgeImg,&#39;RhoResolution&#39;,1,&#39;Theta&#39;,-90:2:89.5);
+maxHough = max(H, [], 1);
+HoughThresh = (max(maxHough) - min(maxHough))/2 + min(maxHough);
+[~, HoughPeaks] = findpeaks(maxHough,&#39;MINPEAKHEIGHT&#39;,HoughThresh,
+&#39;MinPeakDistance&#39;, MinHoughPeakDistance);
+figure(1)
+plot(T, maxHough);
+hold on
+plot([min(T) max(T)], [HoughThresh, HoughThresh], &#39;r&#39;);
+plot(T(HoughPeaks), maxHough(HoughPeaks), &#39;rx&#39;, &#39;MarkerSize&#39;, 12, &#39;LineWidth&#39;, 2);
+hold off
+xlabel(&#39;Theta Value&#39;); ylabel(&#39;Max Hough Transform&#39;);
+legend({&#39;Max Hough Transform&#39;, &#39;Hough Peak Threshold&#39;, &#39;Detected Peak&#39;});
+if numel(HoughPeaks) &gt; 1
+BreakStack = zeros(size(img, 1), size(img, 2), numel(HoughPeaks));
+for m = 1:numel(HoughPeaks)
+boneKernel = strel(&#39;line&#39;, HoughConvolutionLength, T(HoughPeaks(m)));
+kern = double(bwmorph(boneKernel.getnhood(), &#39;dilate&#39;, HoughConvolutionDilate));
+BreakStack(:,:,m) = imfilter(edgeImg, kern).*edgeImg;
+end
+brReg = regionprops(brImg, &#39;Area&#39;, &#39;MajorAxisLength&#39;, &#39;MinorAxisLength&#39;, ...
+&#39;Orientation&#39;, &#39;Centroid&#39;);
+rReg(vertcat(brReg.Area) ~= max(vertcat(brReg.Area))) = [];
+brReg.EllipseCoords = zeros(100, 2);
+t = linspace(0, 2*pi, 100);
+brReg.EllipseCoords(:,1) = brReg.Centroid(1) + brReg.MajorAxisLength/2*cos(t -
+brReg.Orientation);
+brReg.EllipseCoords(:,2) = brReg.Centroid(2) + brReg.MinorAxisLength/2*sin(t -
+brReg.Orientation);
+else
+brReg = [];
+end
+figure(2)
+imshow(img)
+hold on
+colormap(&#39;gray&#39;)
+if ~isempty(brReg)
+plot(brReg.EllipseCoords(:,1), brReg.EllipseCoords(:,2), &#39;r&#39;);
+end
+hold off
